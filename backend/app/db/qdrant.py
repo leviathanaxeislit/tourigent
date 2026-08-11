@@ -53,6 +53,172 @@ class QdrantService:
             )
             logger.info(f"Created Qdrant collection: {self.collection_name}")
 
+        # Create payload indexes for fast semantic search, city filtering, and sorting
+        indexes = [
+            ("destination", models.PayloadSchemaType.KEYWORD),
+            ("category", models.PayloadSchemaType.KEYWORD),
+            ("stop_id", models.PayloadSchemaType.KEYWORD),
+            ("title", models.PayloadSchemaType.TEXT),
+            ("type", models.PayloadSchemaType.KEYWORD),
+            ("duration_days", models.PayloadSchemaType.INTEGER),
+        ]
+        for field_name, field_schema in indexes:
+            try:
+                await self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name=field_name,
+                    field_schema=field_schema,
+                )
+                logger.info(f"Payload index ensured on '{field_name}' ({field_schema}).")
+            except Exception as e:
+                logger.debug(f"Payload index for '{field_name}' setup note: {e}")
+
+    async def get_cached_guidebook(self, req: Any) -> Optional[dict]:
+        """
+        Check if a complete guidebook matching the exact user request configuration
+        already exists in Qdrant Vector DB or local cache.
+        """
+        import hashlib
+        import uuid
+        dest = getattr(req, "destination", "").strip().lower()
+        days = getattr(req, "duration_days", 1)
+        style = getattr(req, "travel_style", "").strip().lower()
+        budget = getattr(req, "budget", "").strip().lower()
+        raw_interests = getattr(req, "interests", []) or []
+        interests_str = ",".join(sorted([i.strip().lower() for i in raw_interests]))
+
+        sig = f"{dest}|{days}|{style}|{budget}|{interests_str}"
+        point_id = str(uuid.UUID(hex=hashlib.md5(sig.encode("utf-8")).hexdigest()))
+
+        # Check local memory cache
+        if hasattr(self, "_memory_guidebook_cache") and point_id in self._memory_guidebook_cache:
+            logger.info(f"Guidebook cache HIT (in-memory) for {dest} ({days} days)!")
+            return self._memory_guidebook_cache[point_id]
+
+        if not self.is_connected or not self.client:
+            return None
+
+        try:
+            # 1. Retrieve by exact point ID hash
+            points = await self.client.retrieve(
+                collection_name=self.collection_name,
+                ids=[point_id],
+                with_payload=True,
+            )
+            if points and points[0].payload:
+                gb_data = points[0].payload.get("guidebook_dict")
+                if gb_data:
+                    logger.info(f"Guidebook cache HIT (Qdrant point ID) for {dest} ({days} days)!")
+                    if not hasattr(self, "_memory_guidebook_cache"):
+                        self._memory_guidebook_cache = {}
+                    self._memory_guidebook_cache[point_id] = gb_data
+                    return gb_data
+
+            # 2. Retrieve by payload filter matching destination + duration + style
+            query_filter = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="type", match=models.MatchValue(value="full_guidebook")
+                    ),
+                    models.FieldCondition(
+                        key="destination", match=models.MatchValue(value=dest)
+                    ),
+                    models.FieldCondition(
+                        key="duration_days", match=models.MatchValue(value=days)
+                    ),
+                ]
+            )
+            search_res = await self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=query_filter,
+                limit=1,
+                with_payload=True,
+            )
+            records, _ = search_res
+            if records and records[0].payload:
+                gb_data = records[0].payload.get("guidebook_dict")
+                if gb_data:
+                    logger.info(f"Guidebook cache HIT (Qdrant filter) for {dest} ({days} days)!")
+                    if not hasattr(self, "_memory_guidebook_cache"):
+                        self._memory_guidebook_cache = {}
+                    self._memory_guidebook_cache[point_id] = gb_data
+                    return gb_data
+        except Exception as e:
+            logger.error(f"Error querying Qdrant for cached guidebook: {e}")
+
+        return None
+
+    async def save_cached_guidebook(self, req: Any, guidebook_dict: dict) -> bool:
+        """Store a fully generated guidebook in Qdrant and memory cache for future matching requests."""
+        import hashlib
+        import uuid
+        dest = getattr(req, "destination", "").strip().lower()
+        days = getattr(req, "duration_days", 1)
+        style = getattr(req, "travel_style", "").strip().lower()
+        budget = getattr(req, "budget", "").strip().lower()
+        raw_interests = getattr(req, "interests", []) or []
+        interests_str = ",".join(sorted([i.strip().lower() for i in raw_interests]))
+
+        sig = f"{dest}|{days}|{style}|{budget}|{interests_str}"
+        point_id = str(uuid.UUID(hex=hashlib.md5(sig.encode("utf-8")).hexdigest()))
+
+        if not hasattr(self, "_memory_guidebook_cache"):
+            self._memory_guidebook_cache = {}
+        self._memory_guidebook_cache[point_id] = guidebook_dict
+
+        if not self.is_connected or not self.client:
+            return True
+
+        try:
+            embed_text = f"Full travel guidebook for {dest} {days} days style {style} budget {budget} interests {interests_str}"
+            vector = await self.generate_embedding(embed_text)
+
+            payload = {
+                "type": "full_guidebook",
+                "destination": dest,
+                "duration_days": days,
+                "travel_style": style,
+                "budget": budget,
+                "interests": raw_interests,
+                "guidebook_dict": guidebook_dict,
+            }
+
+            await self.client.upsert(
+                collection_name=self.collection_name,
+                points=[
+                    models.PointStruct(id=point_id, vector=vector, payload=payload)
+                ],
+            )
+            logger.info(f"Successfully cached full guidebook in Qdrant for {dest} ({days} days)!")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to cache full guidebook in Qdrant: {e}")
+            return False
+
+    async def search_venues_by_config(
+        self,
+        destination: str,
+        travel_style: str = "",
+        interests: Optional[list[str]] = None,
+        limit: int = 15,
+    ) -> list[dict[str, Any]]:
+        """
+        Search vector DB for cached venues matching destination and semantic travel style/interests
+        before executing external AI search.
+        """
+        if not self.is_connected or not self.client:
+            return []
+
+        interests_str = ", ".join(interests) if interests else ""
+        query_text = f"Venues and sights in {destination} style: {travel_style} interests: {interests_str}"
+        query_vector = await self.generate_embedding(query_text)
+
+        return await self.search_similar_venues(
+            query_vector=query_vector,
+            destination=destination,
+            limit=limit,
+        )
+
     async def generate_embedding(self, text: str) -> list[float]:
         """Generate 3072-dim vector embedding using Gemini gemini-embedding-2."""
         if not self.genai_client and settings.GEMINI_API_KEY:

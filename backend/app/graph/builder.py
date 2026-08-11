@@ -42,13 +42,30 @@ def get_genai_client() -> Optional[genai.Client]:
 
 
 async def planner_node(state: GuidebookState) -> Dict[str, Any]:
-    """PlannerNode: Formulates targeted search queries for hotels and daily itineraries."""
+    """PlannerNode: Formulates targeted search queries or retrieves existing cached guidebook."""
     req = state["request"]
     dest = req.destination
     days = req.duration_days
     style = req.travel_style
     budget = req.budget
     interests = ", ".join(req.interests) if req.interests else "local heritage"
+    status_updates = list(state.get("status_updates", []))
+
+    # 1. Check if complete cached guidebook exists in Qdrant Vector DB / memory
+    cached_gb_dict = await qdrant_service.get_cached_guidebook(req)
+    if cached_gb_dict:
+        try:
+            cached_guidebook = GuidebookOutput.model_validate(cached_gb_dict)
+            cache_msg = f"Vector Memory Hit: Found complete cached guidebook for {dest} ({days} days, {style}). Bypassing AI search..."
+            logger.info(cache_msg)
+            status_updates.append(cache_msg)
+            return {
+                "guidebook": cached_guidebook,
+                "search_queries": [],
+                "status_updates": status_updates,
+            }
+        except Exception as parse_err:
+            logger.warning(f"Failed to validate cached guidebook: {parse_err}")
 
     queries = [
         f"Top vintage and boutique hotels in {dest} matching {budget} budget and {style} style, including real addresses, price ranges per night, and unique perks.",
@@ -61,31 +78,73 @@ async def planner_node(state: GuidebookState) -> Dict[str, Any]:
 
     status_msg = f"Planning targeted search queries for {dest} ({days} days)..."
     logger.info(status_msg)
+    status_updates.append(status_msg)
 
     return {
         "search_queries": queries,
-        "status_updates": state.get("status_updates", []) + [status_msg],
+        "status_updates": status_updates,
     }
 
 
 async def grounded_search_node(state: GuidebookState) -> Dict[str, Any]:
-    """GroundedSearchNode: Invokes Gemini Flash with native Google Search Grounding enabled."""
+    """GroundedSearchNode: Searches Qdrant Vector DB first before AI search; skips if cached guidebook exists."""
+    if state.get("guidebook") is not None:
+        logger.info("Guidebook retrieved from vector cache. Skipping grounded AI search.")
+        return {}
+
     client = get_genai_client()
     req = state["request"]
     queries = state.get("search_queries", [])
     queries_str = "\n".join(f"- {q}" for q in queries)
+    status_updates = list(state.get("status_updates", []))
 
-    status_msg = "Grounding venue data via Google Search..."
+    # Search Vector DB for partial venue points
+    cached_venues: List[Dict[str, Any]] = []
+    if qdrant_service.is_connected:
+        try:
+            cached_venues = await qdrant_service.search_venues_by_config(
+                destination=req.destination,
+                travel_style=req.travel_style,
+                interests=req.interests,
+                limit=20,
+            )
+        except Exception as vec_err:
+            logger.warning(f"Qdrant pre-search error: {vec_err}")
+
+    vector_context = ""
+    if cached_venues:
+        vec_status = f"Vector Memory Hit: Found {len(cached_venues)} stored venue(s) in Qdrant DB for {req.destination}."
+        logger.info(vec_status)
+        status_updates.append(vec_status)
+
+        cached_str_items = []
+        for v in cached_venues:
+            title = v.get("title", "Unknown Venue")
+            desc = v.get("description", "")
+            cat = v.get("category", "sight")
+            addr = v.get("address", req.destination)
+            price = v.get("price", "N/A")
+            tip = v.get("vintage_tip", "")
+            cached_str_items.append(
+                f"- [{cat.upper()}] {title} ({addr}): {desc} | Price: {price} | Tip: {tip}"
+            )
+        vector_context = "\n".join(cached_str_items)
+
+    status_msg = "Grounding venue data via Gemini Search..."
     logger.info(status_msg)
+    status_updates.append(status_msg)
 
     if client:
         try:
             prompt = f"""You are a luxury vintage travel historian and researcher.
-Use Google Search Grounding to find real, accurate, up-to-date venue details for a {req.duration_days}-day trip to {req.destination}.
+Use real, accurate venue details for a {req.duration_days}-day trip to {req.destination}.
 
 Travel Style: {req.travel_style}
 Budget Level: {req.budget}
 Interests: {', '.join(req.interests)}
+
+PRE-STORED VECTOR DB CACHED VENUES FOR {req.destination.upper()}:
+{vector_context if vector_context else "No prior vector cached venues found."}
 
 Target Queries:
 {queries_str}
@@ -95,7 +154,6 @@ Return detailed information for:
 2. For each day (Days 1 to {req.duration_days}), exactly 4 distinct activity stops (Morning, Mid-day, Afternoon, Evening) with title, time_slot, description, category (dining|sight|secret|workshop|architecture), location address, lat/lng coordinates, estimated cost, and vintage tip.
 """
 
-            # Primary: Interactions API (client.interactions.create) with generate_content fallback
             model_name = settings.GEMINI_MODEL or "gemini-flash-lite-latest"
             try:
                 interaction = client.interactions.create(
@@ -116,20 +174,24 @@ Return detailed information for:
                 )
                 raw_content = response.text or ""
         except Exception as e:
-            logger.error(f"Grounded Search via Gemini failed ({e}). Falling back to internal grounding.")
-            raw_content = f"Grounded research data for {req.destination} ({req.duration_days} days, {req.travel_style})."
+            logger.error(f"Grounded Search via Gemini failed ({e}). Falling back to internal vector context.")
+            raw_content = f"Grounded research data for {req.destination}.\n{vector_context}"
     else:
         logger.info("No Gemini API key provided. Using fallback grounded content.")
-        raw_content = f"Grounded research data for {req.destination} ({req.duration_days} days, {req.travel_style})."
+        raw_content = f"Grounded research data for {req.destination}.\n{vector_context}"
 
     return {
         "grounded_raw_content": raw_content,
-        "status_updates": state.get("status_updates", []) + [status_msg],
+        "status_updates": status_updates,
     }
 
 
 async def structured_output_node(state: GuidebookState) -> Dict[str, Any]:
-    """StructuredOutputNode: Enforces Pydantic output formatting using GuidebookOutput."""
+    """StructuredOutputNode: Enforces Pydantic output formatting; skips if cached guidebook exists."""
+    if state.get("guidebook") is not None:
+        logger.info("Guidebook retrieved from vector cache. Skipping structured output LLM formatting.")
+        return {}
+
     client = get_genai_client()
     req = state["request"]
     raw_content = state.get("grounded_raw_content", "")
@@ -197,14 +259,17 @@ Strict JSON schema required:
 
 
 async def vector_storage_node(state: GuidebookState) -> Dict[str, Any]:
-    """VectorStorageNode: Generates embeddings via text-embedding-004 and upserts to Qdrant."""
+    """VectorStorageNode: Generates embeddings via text-embedding-004 and upserts full guidebook & venue points to Qdrant."""
     guidebook = state.get("guidebook")
     req = state["request"]
 
-    status_msg = "Storing vector embeddings in Qdrant..."
+    status_msg = "Storing vector embeddings and caching guidebook in Qdrant..."
     logger.info(status_msg)
 
     if guidebook:
+        # Cache full guidebook for future matching requests
+        await qdrant_service.save_cached_guidebook(req, guidebook.model_dump())
+
         points_to_upsert: List[tuple[str, List[float], Dict[str, Any]]] = []
 
         # 1. Hotels
