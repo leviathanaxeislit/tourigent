@@ -21,9 +21,16 @@ export default function Home() {
         }
       })
       setGuidebook(data)
+      if (typeof window !== "undefined" && data?.id) {
+        window.history.pushState({}, "", `/guidebook/${data.id}`)
+      }
     } catch (e: any) {
       console.warn("Backend API error or stream issue, using fallback mock:", e)
-      setGuidebook(createMockGuidebook(request.destination))
+      const mockGb = createMockGuidebook(request.destination)
+      setGuidebook(mockGb)
+      if (typeof window !== "undefined" && mockGb?.id) {
+        window.history.pushState({}, "", `/guidebook/${mockGb.id}`)
+      }
     } finally {
       setLoading(false)
     }

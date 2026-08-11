@@ -129,3 +129,16 @@ async def swap_stop(request: SwapStopRequest) -> SwapStopResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to swap venue stop: {str(e)}",
         )
+
+
+@router.get("/{guidebook_id}", response_model=GuidebookOutput)
+async def get_guidebook_by_id(guidebook_id: str) -> GuidebookOutput:
+    """Retrieve a shareable guidebook by its unique guidebook_id."""
+    from app.db.qdrant import qdrant_service
+    gb_dict = await qdrant_service.get_guidebook_by_id(guidebook_id)
+    if not gb_dict:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Guidebook with ID '{guidebook_id}' not found.",
+        )
+    return GuidebookOutput.model_validate(gb_dict)

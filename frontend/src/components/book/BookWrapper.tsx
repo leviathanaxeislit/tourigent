@@ -13,7 +13,9 @@ import {
   Clock,
   DollarSign,
   Layers,
-  X
+  X,
+  Share2,
+  Check,
 } from "lucide-react"
 import { GuidebookOutput, ActivityStop, StampBadge } from "@/types/guidebook"
 import { GuidebookPage } from "./GuidebookPage"
@@ -56,6 +58,7 @@ export const BookWrapper: React.FC<BookWrapperProps> = ({
   const [currentPage, setCurrentPage] = useState(0)
   const [isMounted, setIsMounted] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [copiedShare, setCopiedShare] = useState(false)
   const [swappingStopId, setSwappingStopId] = useState<string | null>(null)
   const [selectedStop, setSelectedStop] = useState<ActivityStop | null>(null)
   const [swapTarget, setSwapTarget] = useState<{
@@ -245,10 +248,34 @@ export const BookWrapper: React.FC<BookWrapperProps> = ({
         </div>
 
         {/* Keyboard Arrow Helper Badge & Return Button */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Badge variant="outline" className="hidden lg:flex text-[10px] font-sans border-[#94a3b8] text-[#1e3a5f]">
             Use ← → arrow keys
           </Badge>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (typeof window !== "undefined" && guidebook?.id) {
+                const shareUrl = `${window.location.origin}/guidebook/${guidebook.id}`
+                navigator.clipboard.writeText(shareUrl)
+                setCopiedShare(true)
+                setTimeout(() => setCopiedShare(false), 2500)
+              }
+            }}
+            className="bg-[#f5f0eb] border-[#b8860b] text-[#2d3130] hover:bg-[#b8860b]/20 text-xs gap-1 font-mono font-bold"
+          >
+            {copiedShare ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-[#22382c]" /> Copied Link!
+              </>
+            ) : (
+              <>
+                <Share2 className="w-3.5 h-3.5 text-[#9e472a]" /> Share
+              </>
+            )}
+          </Button>
 
           {onCloseBook && (
             <Button

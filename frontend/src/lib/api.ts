@@ -122,6 +122,18 @@ export async function swapActivityStop(
 }
 
 /**
+ * Fetches a shareable guidebook by its unique ID.
+ */
+export async function fetchGuidebookById(guidebookId: string): Promise<GuidebookOutput> {
+  const res = await fetch(`${API_BASE_URL}/guidebook/${guidebookId}`)
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}))
+    throw new Error(errorData.detail || `Guidebook not found (${res.status})`)
+  }
+  return await res.json()
+}
+
+/**
  * Health check endpoint ping.
  */
 export async function checkBackendHealth(): Promise<{ status: string; qdrant_connected: boolean }> {

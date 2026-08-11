@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
-import { Book, BookOpen, Calendar, MapPin, Compass } from "lucide-react"
+import { Book, BookOpen, Calendar, MapPin, Compass, Share2, Check } from "lucide-react"
 import { GuidebookOutput } from "@/types/guidebook"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -19,6 +19,16 @@ export const BookContainer: React.FC<BookContainerProps> = ({
   onCloseBook,
 }) => {
   const [isOpen, setIsOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const handleShare = () => {
+    if (typeof window !== "undefined" && guidebook?.id) {
+      const shareUrl = `${window.location.origin}/guidebook/${guidebook.id}`
+      navigator.clipboard.writeText(shareUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    }
+  }
 
   // Render Closed Tourigent Travel Ledger View
   if (!isOpen) {
@@ -68,12 +78,29 @@ export const BookContainer: React.FC<BookContainerProps> = ({
               </span>
             </div>
 
-            <Button
-              onClick={() => setIsOpen(true)}
-              className="w-full h-12 text-sm gap-2 bg-[#22382c] hover:bg-[#2d3130] text-[#f5f0eb] border-2 border-[#b8860b] font-serif uppercase tracking-wider font-bold shadow-md cursor-pointer"
-            >
-              <Compass className="w-5 h-5 text-[#b8860b] animate-spin" /> Unfold Tourigent Ledger
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setIsOpen(true)}
+                className="flex-1 h-12 text-xs gap-2 bg-[#22382c] hover:bg-[#2d3130] text-[#f5f0eb] border-2 border-[#b8860b] font-serif uppercase tracking-wider font-bold shadow-md cursor-pointer"
+              >
+                <Compass className="w-4 h-4 text-[#b8860b]" /> Unfold Ledger
+              </Button>
+              <Button
+                onClick={handleShare}
+                variant="outline"
+                className="h-12 px-4 border-2 border-[#b8860b] bg-[#e3ded6] hover:bg-[#d5cfc4] text-[#2d3130] font-mono text-xs font-bold gap-2 cursor-pointer"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4 text-[#22382c]" /> Copied!
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-4 h-4 text-[#9e472a]" /> Share Link
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
 

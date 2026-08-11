@@ -195,6 +195,49 @@ class QdrantService:
             logger.error(f"Failed to cache full guidebook in Qdrant: {e}")
             return False
 
+    async def get_guidebook_by_id(self, guidebook_id: str) -> Optional[dict]:
+        """Retrieve a stored guidebook payload by guidebook_id from memory or Qdrant vector DB."""
+        # 1. Check session memory
+        from app.services.swapper import get_guidebook_session
+        session_gb = get_guidebook_session(guidebook_id)
+        if session_gb:
+            return session_gb
+
+        # 2. Check local memory cache
+        if hasattr(self, "_memory_guidebook_cache"):
+            for gb_dict in self._memory_guidebook_cache.values():
+                if gb_dict.get("id") == guidebook_id:
+                    return gb_dict
+
+        if not self.is_connected or not self.client:
+            return None
+
+        # 3. Search Qdrant for full_guidebook matching ID in payload
+        try:
+            query_filter = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="type", match=models.MatchValue(value="full_guidebook")
+                    )
+                ]
+            )
+            search_res = await self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=query_filter,
+                limit=100,
+                with_payload=True,
+            )
+            records, _ = search_res
+            for record in records:
+                if record.payload:
+                    gb_dict = record.payload.get("guidebook_dict")
+                    if gb_dict and gb_dict.get("id") == guidebook_id:
+                        return gb_dict
+        except Exception as e:
+            logger.error(f"Error fetching guidebook by id '{guidebook_id}': {e}")
+
+        return None
+
     async def search_venues_by_config(
         self,
         destination: str,
