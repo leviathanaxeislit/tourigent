@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Compass, MapPin, Sparkles, BookOpen, Clock, Award, ChevronRight, CheckCircle2, Bookmark, Star, Calendar, Map, Mountain, Layers, Globe, Palmtree } from "lucide-react"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,9 +17,17 @@ import { Logo } from "@/components/brand/Logo"
 
 interface LandingPageProps {
   onGenerateClick?: (request: GuidebookRequest) => void
+  onOpenCachedLedger?: (guidebookId: string) => void
+  apiError?: string | null
+  onClearError?: () => void
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onGenerateClick }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({
+  onGenerateClick,
+  onOpenCachedLedger,
+  apiError,
+  onClearError,
+}) => {
   const [destination, setDestination] = useState("Paris")
   const [duration, setDuration] = useState("3")
   const [travelStyle, setTravelStyle] = useState("Vintage Explorer")
@@ -31,6 +39,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGenerateClick }) => 
   ])
   const [openFaq, setOpenFaq] = useState<number | null>(0)
   const [isMapModalOpen, setIsMapModalOpen] = useState(false)
+  const [cachedGuidebookId, setCachedGuidebookId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedId = localStorage.getItem("tourigent_last_guidebook_id")
+      if (savedId && !savedId.startsWith("gb-mock-")) {
+        setCachedGuidebookId(savedId)
+      }
+    }
+  }, [])
 
   const interestOptions = [
     "Architecture",
@@ -50,11 +68,28 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGenerateClick }) => 
     )
   }
 
-  const handleGenerate = (e: React.FormEvent) => {
+  const handleNavbarCtaClick = () => {
+    if (cachedGuidebookId) {
+      if (onOpenCachedLedger) {
+        onOpenCachedLedger(cachedGuidebookId)
+      } else {
+        window.location.href = `/guidebook/${cachedGuidebookId}`
+      }
+      return
+    }
+
+    const el = document.getElementById("destination-input")
+    if (el) {
+      el.focus()
+      el.scrollIntoView({ behavior: "smooth", block: "center" })
+    }
+  }
+
+  const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (onGenerateClick) {
       onGenerateClick({
-        destination: destination || "Paris",
+        destination: destination.trim() || "Paris",
         duration_days: Math.max(1, Math.min(14, parseInt(duration) || 3)),
         travel_style: travelStyle,
         budget: budget,
@@ -103,19 +138,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGenerateClick }) => 
           </nav>
 
           <Button
-            onClick={() =>
-              onGenerateClick &&
-              onGenerateClick({
-                destination: destination || "Paris",
-                duration_days: Math.max(1, Math.min(14, parseInt(duration) || 3)),
-                travel_style: travelStyle,
-                budget: budget,
-                interests: selectedInterests.length > 0 ? selectedInterests : ["Architecture", "Hidden Cafes"],
-              })
-            }
-            className="gap-2 bg-[#22382c] hover:bg-[#2d3130] text-[#f5f0eb] border border-[#b8860b] font-serif shadow-md text-xs tracking-wider uppercase font-bold cursor-pointer"
+            onClick={handleNavbarCtaClick}
+            className="group gap-2 bg-[#22382c] hover:bg-[#1a2e23] text-[#f5f0eb] border-2 border-[#b8860b] font-serif shadow-md hover:shadow-lg text-xs tracking-wider uppercase font-bold cursor-pointer transition-all active:scale-[0.98]"
           >
-            <Compass className="w-4 h-4 text-[#b8860b] animate-spin" /> Open Tourigent Ledger
+            {cachedGuidebookId ? (
+              <>
+                <BookOpen className="w-4 h-4 text-[#b8860b] group-hover:scale-110 transition-transform" />
+                <span>Open Saved Ledger</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 text-[#b8860b] group-hover:rotate-12 transition-transform" />
+                <span>Craft Expedition</span>
+              </>
+            )}
+            <ChevronRight className="w-3.5 h-3.5 text-[#b8860b] opacity-80 group-hover:translate-x-0.5 transition-transform" />
           </Button>
         </div>
       </header>
@@ -164,7 +201,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGenerateClick }) => 
                 <div className="pine-wax-seal text-xs font-mono font-bold">SEAL</div>
               </div>
 
-              <form onSubmit={handleGenerate} className="space-y-4">
+              {apiError && (
+                <div className="mb-4 p-3 border-2 border-[#9e472a] bg-[#f5f0eb] rounded text-xs font-mono text-[#9e472a] flex items-center justify-between shadow-xs">
+                  <span>⚠️ {apiError}</span>
+                  {onClearError && (
+                    <button type="button" onClick={onClearError} className="underline font-bold cursor-pointer ml-2">
+                      Dismiss
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <form onSubmit={handleFormSubmit} className="space-y-4">
                 <div className="grid md:grid-cols-3 gap-4">
                   <div className="md:col-span-2 space-y-1">
                     <label className="text-xs font-mono font-bold text-[#22382c] uppercase tracking-wider">
@@ -173,6 +221,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGenerateClick }) => 
                     <div className="relative">
                       <MapPin className="absolute left-3 top-3 h-4 w-4 text-[#9e472a]" />
                       <Input
+                        id="destination-input"
                         type="text"
                         value={destination}
                         onChange={(e) => setDestination(e.target.value)}

@@ -26,9 +26,12 @@ export default function GuidebookSharePage() {
       try {
         const data = await fetchGuidebookById(guidebookId)
         setGuidebook(data)
+        if (typeof window !== "undefined" && data?.id) {
+          localStorage.setItem("tourigent_last_guidebook_id", data.id)
+        }
       } catch (err: any) {
         console.error("Error loading shareable guidebook:", err)
-        setError(err.message || "Failed to load requested guidebook.")
+        setError(err.message || `Guidebook with ID '${guidebookId}' not found.`)
       } finally {
         setLoading(false)
       }

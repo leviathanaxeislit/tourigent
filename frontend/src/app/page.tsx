@@ -12,9 +12,11 @@ export default function Home() {
   const [guidebook, setGuidebook] = useState<GuidebookOutput | null>(null)
   const [loading, setLoading] = useState(false)
   const [statusMessage, setStatusMessage] = useState("Initializing LangGraph Tourist Agent Pipeline...")
+  const [apiError, setApiError] = useState<string | null>(null)
 
   const handleGenerate = async (request: GuidebookRequest) => {
     setLoading(true)
+    setApiError(null)
     setStatusMessage("Planning targeted venue searches & itinerary structure...")
     try {
       const data = await generateGuidebook(request, (update: StatusUpdate) => {
@@ -23,18 +25,16 @@ export default function Home() {
         }
       })
       if (data?.id) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("tourigent_last_guidebook_id", data.id)
+        }
         router.push(`/guidebook/${data.id}`)
       } else {
         setGuidebook(data)
       }
     } catch (e: any) {
-      console.warn("Backend API error or stream issue, using fallback mock:", e)
-      const mockGb = createMockGuidebook(request.destination)
-      if (mockGb?.id) {
-        router.push(`/guidebook/${mockGb.id}`)
-      } else {
-        setGuidebook(mockGb)
-      }
+      console.error("Backend API error:", e)
+      setApiError(e.message || "Failed to generate vintage guidebook. Please ensure backend service is running.")
     } finally {
       setLoading(false)
     }
@@ -108,121 +108,12 @@ export default function Home() {
     )
   }
 
-  return <LandingPage onGenerateClick={handleGenerate} />
-}
-
-function createMockGuidebook(dest: string): GuidebookOutput {
-  const city = dest || "Paris"
-  return {
-    id: "gb-mock-1",
-    title: `Vintage Guidebook: ${city}`,
-    subtitle: "A 3-Day Curated Journey for Nostalgic Travelers",
-    destination: city,
-    duration_days: 3,
-    cover_stamp: {
-      id: "stamp-cover-1",
-      title: `Grand Tour of ${city}`,
-      category: "Passport Seal",
-      ink_color: "gold",
-      rotation_deg: -3.5,
-      earned_date: "1924-08-10",
-    },
-    hotels: [
-      {
-        id: "h1",
-        name: `The Grand Heritage Hotel ${city}`,
-        vintage_vibe: "1920s Belle Époque & Mahogany Lounge",
-        address: `12 Rue de l'Ancien, ${city}`,
-        price_per_night: "€180 - €240",
-        rating: 4.9,
-        perk: "Includes complimentary vintage afternoon tea & vinyl listening room",
-      },
-      {
-        id: "h2",
-        name: `L'Artisan Boutique Inn ${city}`,
-        vintage_vibe: "Mid-Century Library & Garden Patio",
-        address: `45 Via Antiqua, ${city}`,
-        price_per_night: "€120 - €160",
-        rating: 4.7,
-        perk: "Handcrafted brass keycard & complimentary bicycle loan",
-      },
-    ],
-    pages: [
-      {
-        day_number: 1,
-        theme_title: `Secrets of Old ${city}`,
-        date_label: "Day 1 Itinerary",
-        ephemera_note: `Parchment notes gathered by vintage travelers in ${city}. Preserve ink signatures.`,
-        stamps: [
-          {
-            id: "s1",
-            title: "Heritage Pass",
-            category: "Exploration",
-            ink_color: "crimson",
-            rotation_deg: 2.5,
-            earned_date: "1924-08-10",
-          },
-        ],
-        activities: [
-          {
-            id: "stop-1",
-            time_slot: "09:00 AM — Morning Elixir & Bakery",
-            title: `Café de l'Ombre in ${city}`,
-            description:
-              "A hidden courtyard cafe serving single-origin drip coffee poured into vintage porcelain cups.",
-            category: "dining",
-            location_name: `Old Town Quarter, ${city}`,
-            lat: 48.8566,
-            lng: 2.3522,
-            estimated_cost: "€8 - €15",
-            vintage_tip: "Ask the barista for the secret bookshop key behind the mirror.",
-          },
-          {
-            id: "stop-2",
-            time_slot: "11:30 AM — Antiquarian Browsing",
-            title: "Cabinet of Curiosities",
-            description:
-              "Rare 19th-century maps, leatherbound travelogues, and hand-inked postcards.",
-            category: "secret",
-            location_name: `Artisan Passage, ${city}`,
-            lat: 48.857,
-            lng: 2.353,
-            estimated_cost: "Free Entry",
-            vintage_tip: "Check top drawer for 1950s transit tokens.",
-          },
-        ],
-      },
-      {
-        day_number: 2,
-        theme_title: "Artisan Guilds & Hidden Gardens",
-        date_label: "Day 2 Itinerary",
-        ephemera_note: "Quiet courtyards tucked behind iron gates.",
-        stamps: [
-          {
-            id: "s2",
-            title: "Artisan Seal",
-            category: "Craftsmanship",
-            ink_color: "navy",
-            rotation_deg: -4.0,
-            earned_date: "1924-08-11",
-          },
-        ],
-        activities: [
-          {
-            id: "stop-3",
-            time_slot: "02:00 PM — Glasshouse Walk",
-            title: `${city} Botanical Conservatory`,
-            description: "Ironwork pavilion designed in 1895 holding tropical flora.",
-            category: "sight",
-            location_name: `Parc Centenaire, ${city}`,
-            lat: 48.858,
-            lng: 2.354,
-            estimated_cost: "€6",
-            vintage_tip: "Sunlight hits stained glass at 3:45 PM.",
-          },
-        ],
-      },
-    ],
-    created_at: new Date().toISOString(),
-  }
+  return (
+    <LandingPage
+      onGenerateClick={handleGenerate}
+      onOpenCachedLedger={(id) => router.push(`/guidebook/${id}`)}
+      apiError={apiError}
+      onClearError={() => setApiError(null)}
+    />
+  )
 }
