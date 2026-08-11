@@ -1,0 +1,399 @@
+import asyncio
+from datetime import datetime, timezone
+import json
+import logging
+from typing import Any, Dict, List, Optional, TypedDict
+import uuid
+
+from google import genai
+from google.genai import types
+from langgraph.graph import END, StateGraph
+
+from app.core.config import settings
+from app.db.qdrant import qdrant_service
+from app.schemas.guidebook import (
+    ActivityStop,
+    DailyPage,
+    GuidebookOutput,
+    GuidebookRequest,
+    HotelListing,
+    StampBadge,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class GuidebookState(TypedDict):
+    request: GuidebookRequest
+    search_queries: List[str]
+    grounded_raw_content: str
+    guidebook: Optional[GuidebookOutput]
+    status_updates: List[str]
+
+
+def get_genai_client() -> Optional[genai.Client]:
+    if not settings.GEMINI_API_KEY:
+        return None
+    try:
+        return genai.Client(api_key=settings.GEMINI_API_KEY)
+    except Exception as e:
+        logger.warning(f"Could not instantiate Gemini Client: {e}")
+        return None
+
+
+async def planner_node(state: GuidebookState) -> Dict[str, Any]:
+    """PlannerNode: Formulates targeted search queries for hotels and daily itineraries."""
+    req = state["request"]
+    dest = req.destination
+    days = req.duration_days
+    style = req.travel_style
+    budget = req.budget
+    interests = ", ".join(req.interests) if req.interests else "local heritage"
+
+    queries = [
+        f"Top vintage and boutique hotels in {dest} matching {budget} budget and {style} style, including real addresses, price ranges per night, and unique perks.",
+    ]
+
+    for day in range(1, days + 1):
+        queries.append(
+            f"Day {day} travel itinerary in {dest} focusing on {interests}: 4 unique venue stops (breakfast cafe, antiquarian/workshop, sight/architecture, speakeasy/dinner) with exact street addresses, opening hours, estimated costs, and coordinates."
+        )
+
+    status_msg = f"Planning targeted search queries for {dest} ({days} days)..."
+    logger.info(status_msg)
+
+    return {
+        "search_queries": queries,
+        "status_updates": state.get("status_updates", []) + [status_msg],
+    }
+
+
+async def grounded_search_node(state: GuidebookState) -> Dict[str, Any]:
+    """GroundedSearchNode: Invokes Gemini Flash with native Google Search Grounding enabled."""
+    client = get_genai_client()
+    req = state["request"]
+    queries = state.get("search_queries", [])
+    queries_str = "\n".join(f"- {q}" for q in queries)
+
+    status_msg = "Grounding venue data via Google Search..."
+    logger.info(status_msg)
+
+    if client:
+        try:
+            prompt = f"""You are a luxury vintage travel historian and researcher.
+Use Google Search Grounding to find real, accurate, up-to-date venue details for a {req.duration_days}-day trip to {req.destination}.
+
+Travel Style: {req.travel_style}
+Budget Level: {req.budget}
+Interests: {', '.join(req.interests)}
+
+Target Queries:
+{queries_str}
+
+Return detailed information for:
+1. 2 Vintage/Boutique Hotels (Name, address, price per night, vintage vibe, perk).
+2. For each day (Days 1 to {req.duration_days}), exactly 4 distinct activity stops (Morning, Mid-day, Afternoon, Evening) with title, time_slot, description, category (dining|sight|secret|workshop|architecture), location address, lat/lng coordinates, estimated cost, and vintage tip.
+"""
+
+            # Primary: Interactions API (client.interactions.create) with generate_content fallback
+            model_name = settings.GEMINI_MODEL or "gemini-flash-lite-latest"
+            try:
+                interaction = client.interactions.create(
+                    model=model_name,
+                    input=prompt,
+                    tools=[{"type": "google_search"}],
+                )
+                raw_content = interaction.output_text or ""
+            except Exception as interaction_err:
+                logger.info(f"Interactions API fallback ({interaction_err}), using generate_content")
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        tools=[types.Tool(google_search=types.GoogleSearch())],
+                        temperature=0.3,
+                    ),
+                )
+                raw_content = response.text or ""
+        except Exception as e:
+            logger.error(f"Grounded Search via Gemini failed ({e}). Falling back to internal grounding.")
+            raw_content = f"Grounded research data for {req.destination} ({req.duration_days} days, {req.travel_style})."
+    else:
+        logger.info("No Gemini API key provided. Using fallback grounded content.")
+        raw_content = f"Grounded research data for {req.destination} ({req.duration_days} days, {req.travel_style})."
+
+    return {
+        "grounded_raw_content": raw_content,
+        "status_updates": state.get("status_updates", []) + [status_msg],
+    }
+
+
+async def structured_output_node(state: GuidebookState) -> Dict[str, Any]:
+    """StructuredOutputNode: Enforces Pydantic output formatting using GuidebookOutput."""
+    client = get_genai_client()
+    req = state["request"]
+    raw_content = state.get("grounded_raw_content", "")
+
+    status_msg = "Formatting paper pages..."
+    logger.info(status_msg)
+
+    guidebook: Optional[GuidebookOutput] = None
+
+    if client and raw_content:
+        try:
+            prompt = f"""Convert the following grounded travel research into a structured JSON travel guidebook matching the GuidebookOutput schema.
+
+Destination: {req.destination}
+Duration: {req.duration_days} Days
+Travel Style: {req.travel_style}
+Budget: {req.budget}
+
+Research Content:
+{raw_content}
+
+Strict JSON schema required:
+- title: e.g. "Vintage Guidebook: {req.destination}"
+- subtitle: e.g. "A {req.duration_days}-Day Curated Journey for the Nostalgic Traveler"
+- cover_stamp: StampBadge object (id, title, category, ink_color, rotation_deg, earned_date)
+- hotels: list of HotelListing (id, name, vintage_vibe, address, price_per_night, rating, perk)
+- pages: list of {req.duration_days} DailyPage objects, each having day_number, theme_title, date_label, ephemera_note, stamps (list), activities (list of 4 ActivityStop objects with id, time_slot, title, description, category, location_name, lat, lng, estimated_cost, vintage_tip).
+"""
+
+            model_name = settings.GEMINI_MODEL or "gemini-flash-lite-latest"
+            try:
+                interaction = client.interactions.create(
+                    model=model_name,
+                    input=prompt,
+                    response_format={
+                        "type": "object",
+                        "schema": GuidebookOutput.model_json_schema(),
+                    },
+                )
+                if interaction.output_text:
+                    guidebook = GuidebookOutput.model_validate_json(interaction.output_text)
+            except Exception as interaction_err:
+                logger.info(f"Interactions API fallback ({interaction_err}), using generate_content")
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=GuidebookOutput,
+                        temperature=0.2,
+                    ),
+                )
+                if response.text:
+                    guidebook = GuidebookOutput.model_validate_json(response.text)
+        except Exception as e:
+            logger.error(f"Structured output enforcement failed ({e}). Generating fallback GuidebookOutput.")
+
+    if not guidebook:
+        guidebook = _build_fallback_guidebook(req)
+
+    return {
+        "guidebook": guidebook,
+        "status_updates": state.get("status_updates", []) + [status_msg],
+    }
+
+
+async def vector_storage_node(state: GuidebookState) -> Dict[str, Any]:
+    """VectorStorageNode: Generates embeddings via text-embedding-004 and upserts to Qdrant."""
+    guidebook = state.get("guidebook")
+    req = state["request"]
+
+    status_msg = "Storing vector embeddings in Qdrant..."
+    logger.info(status_msg)
+
+    if guidebook:
+        points_to_upsert: List[tuple[str, List[float], Dict[str, Any]]] = []
+
+        # 1. Hotels
+        for hotel in guidebook.hotels:
+            text = f"{hotel.name} {hotel.vintage_vibe} {hotel.address} {hotel.perk}"
+            vector = await qdrant_service.generate_embedding(text)
+            payload = {
+                "destination": req.destination,
+                "stop_id": hotel.id,
+                "category": "hotel",
+                "price": hotel.price_per_night,
+                "lat": None,
+                "lng": None,
+                "title": hotel.name,
+                "description": hotel.vintage_vibe,
+                "address": hotel.address,
+                "perk": hotel.perk,
+            }
+            points_to_upsert.append((hotel.id, vector, payload))
+
+        # 2. Daily Activities
+        for page in guidebook.pages:
+            for stop in page.activities:
+                text = f"{stop.title} {stop.description} {stop.location_name} {stop.category} {stop.vintage_tip or ''}"
+                vector = await qdrant_service.generate_embedding(text)
+                payload = {
+                    "destination": req.destination,
+                    "stop_id": stop.id,
+                    "category": stop.category,
+                    "price": stop.estimated_cost,
+                    "lat": stop.lat,
+                    "lng": stop.lng,
+                    "title": stop.title,
+                    "description": stop.description,
+                    "address": stop.location_name,
+                    "vintage_tip": stop.vintage_tip,
+                }
+                stop.qdrant_vector_id = stop.id
+                points_to_upsert.append((stop.id, vector, payload))
+
+        if qdrant_service.is_connected and points_to_upsert:
+            count = await qdrant_service.upsert_venues_batch(points_to_upsert)
+            logger.info(f"Upserted {count} venue points into Qdrant collection '{qdrant_service.collection_name}'.")
+
+    return {
+        "guidebook": guidebook,
+        "status_updates": state.get("status_updates", []) + [status_msg],
+    }
+
+
+def _build_fallback_guidebook(req: GuidebookRequest) -> GuidebookOutput:
+    dest = req.destination.capitalize()
+    book_id = f"gb-{uuid.uuid4().hex[:8]}"
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    cover_stamp = StampBadge(
+        id=f"stamp-cover-{uuid.uuid4().hex[:4]}",
+        title=f"Grand Tour of {dest}",
+        category="Passport Seal",
+        ink_color="gold",
+        rotation_deg=-4.2,
+        earned_date=today_str,
+    )
+
+    hotels = [
+        HotelListing(
+            id=f"hotel-1-{uuid.uuid4().hex[:4]}",
+            name=f"The Grand Heritage Hotel {dest}",
+            vintage_vibe="1920s Belle Époque & Mahogany Lounge",
+            address=f"12 Rue de l'Ancien, {dest}",
+            price_per_night="€180 - €240",
+            rating=4.9,
+            perk="Includes complimentary vintage afternoon tea & vinyl listening room",
+        ),
+        HotelListing(
+            id=f"hotel-2-{uuid.uuid4().hex[:4]}",
+            name=f"L'Artisan Boutique Inn {dest}",
+            vintage_vibe="Mid-Century Library & Garden Patio",
+            address=f"45 Via Antiqua, {dest}",
+            price_per_night="€120 - €160",
+            rating=4.7,
+            perk="Handcrafted brass keycard & complimentary bicycle loan",
+        ),
+    ]
+
+    pages: List[DailyPage] = []
+    for day in range(1, req.duration_days + 1):
+        stamps = [
+            StampBadge(
+                id=f"stamp-d{day}-1",
+                title=f"Day {day} Heritage Pass",
+                category="Exploration",
+                ink_color="crimson" if day % 2 == 1 else "navy",
+                rotation_deg=(day * 2.5) % 8 - 4,
+                earned_date=today_str,
+            )
+        ]
+
+        activities = [
+            ActivityStop(
+                id=f"stop-d{day}-1",
+                time_slot="09:00 AM — Morning Elixir & Bakery",
+                title=f"Café de l'Ombre in {dest}",
+                description="Hidden courtyard cafe serving single-origin drip coffee poured into vintage porcelain cups.",
+                category="dining",
+                location_name=f"Old Town Quarter, {dest}",
+                lat=48.8566,
+                lng=2.3522,
+                estimated_cost="€8 - €15",
+                vintage_tip="Ask the barista for the secret bookshop key behind the mirror.",
+            ),
+            ActivityStop(
+                id=f"stop-d{day}-2",
+                time_slot="11:30 AM — Antiquarian Browsing",
+                title=f"Cabinet of Curiosities {day}",
+                description="Rare 19th-century maps, leatherbound travelogues, and hand-inked postcards.",
+                category="secret",
+                location_name=f"Artisan Passage, {dest}",
+                lat=48.8570,
+                lng=2.3530,
+                estimated_cost="Free Entry (Items €10+)",
+                vintage_tip="Check the top drawer of the apothecary chest for original 1950s transit tokens.",
+            ),
+            ActivityStop(
+                id=f"stop-d{day}-3",
+                time_slot="03:00 PM — Architecture Promenade",
+                title=f"{dest} Botanical Glasshouse",
+                description="Ironwork pavilion designed in 1895 holding tropical flora and marble statues.",
+                category="sight",
+                location_name=f"Parc Centenaire, {dest}",
+                lat=48.8580,
+                lng=2.3540,
+                estimated_cost="€6",
+                vintage_tip="Best sunlight hits the dome stained glass at exactly 3:45 PM.",
+            ),
+            ActivityStop(
+                id=f"stop-d{day}-4",
+                time_slot="07:30 PM — Speakeasy Dinner & Jazz",
+                title=f"The Brass Phonograph {dest}",
+                description="Candlelit subterranean lounge with live acoustic jazz and heirloom cocktail recipes.",
+                category="dining",
+                location_name=f"Subterranean Vault 4, {dest}",
+                lat=48.8590,
+                lng=2.3550,
+                estimated_cost="€35 - €60",
+                vintage_tip="Whisper the password 'Parchment' at the velvet curtain entrance.",
+            ),
+        ]
+
+        pages.append(
+            DailyPage(
+                day_number=day,
+                theme_title=f"Day {day}: Secrets of Old {dest}",
+                date_label=f"Day {day} Itinerary",
+                ephemera_note=f"Parchment notes gathered by vintage travelers in {dest}. Preserve ink signatures.",
+                stamps=stamps,
+                activities=activities,
+            )
+        )
+
+    return GuidebookOutput(
+        id=book_id,
+        title=f"Vintage Guidebook: {dest}",
+        subtitle=f"A {req.duration_days}-Day Curated Journey for the Nostalgic Traveler",
+        destination=dest,
+        duration_days=req.duration_days,
+        cover_stamp=cover_stamp,
+        hotels=hotels,
+        pages=pages,
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+def create_guidebook_graph() -> StateGraph:
+    """Build and compile the LangGraph workflow graph."""
+    graph = StateGraph(GuidebookState)
+
+    graph.add_node("planner", planner_node)
+    graph.add_node("grounded_search", grounded_search_node)
+    graph.add_node("structured_output", structured_output_node)
+    graph.add_node("vector_storage", vector_storage_node)
+
+    graph.set_entry_point("planner")
+    graph.add_edge("planner", "grounded_search")
+    graph.add_edge("grounded_search", "structured_output")
+    graph.add_edge("structured_output", "vector_storage")
+    graph.add_edge("vector_storage", END)
+
+    return graph.compile()
+
+
+guidebook_pipeline_graph = create_guidebook_graph()

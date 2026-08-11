@@ -1,0 +1,183 @@
+@import "tailwindcss";
+
+@theme {
+  --font-cinzel: var(--font-cinzel), "Cinzel", "Playfair Display", serif;
+  --font-cinzel-dec: var(--font-cinzel-dec), "Cinzel Decorative", "IM Fell English SC", serif;
+  --font-courier: var(--font-courier), "Courier Prime", "Special Elite", monospace;
+  --font-handwriting: var(--font-caveat), "Caveat", "Shadows Into Light", cursive;
+
+  /* Tourigent Vintage Travel Ledger Palette */
+  --color-background: #f5f0eb; /* Cream Rag Paper */
+  --color-foreground: #2d3130; /* Vintage Slate & Charcoal */
+  --color-card: #f5f0eb;
+  --color-card-foreground: #2d3130;
+  --color-popover: #e3ded6; /* Parchment Fog Tint */
+  --color-popover-foreground: #2d3130;
+  --color-primary: #22382c; /* Deep Forest Green */
+  --color-primary-foreground: #f5f0eb;
+  --color-secondary: #e3ded6; /* Parchment Tint */
+  --color-secondary-foreground: #2d3130;
+  --color-muted: #e3ded6;
+  --color-muted-foreground: #5c6260;
+  --color-accent: #9e472a; /* Terracotta Soil / Copper */
+  --color-accent-foreground: #f5f0eb;
+  --color-destructive: #9e472a;
+  --color-destructive-foreground: #f5f0eb;
+  --color-border: #b8860b; /* Weathered Brass Gold */
+  --color-input: #e3ded6;
+  --color-ring: #22382c;
+
+  --radius-lg: 0.5rem;
+  --radius-md: 0.375rem;
+  --radius-sm: 0.25rem;
+}
+
+:root {
+  --background: #f5f0eb;
+  --foreground: #2d3130;
+  --card: #f5f0eb;
+  --card-foreground: #2d3130;
+  --popover: #e3ded6;
+  --popover-foreground: #2d3130;
+  --primary: #22382c;
+  --primary-foreground: #f5f0eb;
+  --secondary: #e3ded6;
+  --secondary-foreground: #2d3130;
+  --muted: #e3ded6;
+  --muted-foreground: #5c6260;
+  --accent: #9e472a;
+  --accent-foreground: #f5f0eb;
+  --destructive: #9e472a;
+  --destructive-foreground: #f5f0eb;
+  --border: #b8860b;
+  --input: #e3ded6;
+  --ring: #22382c;
+}
+
+/* 1. Deckle-Edged Raw Paper Tear */
+.deckle-edge {
+  clip-path: polygon(
+    0% 0.5%, 3% 0%, 7% 0.8%, 12% 0.1%, 18% 0.9%, 25% 0.2%, 31% 0.8%, 38% 0%, 45% 0.7%, 52% 0.1%, 60% 0.9%, 68% 0.2%, 75% 0.8%, 83% 0.1%, 90% 0.9%, 96% 0.2%, 100% 0.6%,
+    100% 99.2%, 96% 100%, 91% 99.1%, 84% 99.8%, 78% 99.2%, 71% 100%, 64% 99.1%, 57% 99.9%, 50% 99.2%, 42% 100%, 35% 99.1%, 28% 99.8%, 21% 99.2%, 14% 100%, 7% 99.1%, 0% 99.7%
+  );
+}
+
+/* Topographical Elevation Contour Overlay */
+.bg-topo-pattern {
+  background-color: #f5f0eb;
+  background-image: 
+    radial-gradient(#d6cebe 1px, transparent 1px), 
+    radial-gradient(#d6cebe 1px, #f5f0eb 1px),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 800 800' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23b8860b' stroke-width='0.6' opacity='0.15'%3E%3Cpath d='M-100 200 C 100 120 300 280 500 180 C 700 80 900 240 1000 160'/%3E%3Cpath d='M-100 300 C 150 210 350 340 550 250 C 750 160 950 310 1050 220'/%3E%3Cpath d='M-100 400 C 80 320 280 450 480 370 C 680 290 880 420 1080 340'/%3E%3Cpath d='M-100 500 C 120 410 320 540 520 460 C 720 380 920 500 1100 420'/%3E%3Cpath d='M-100 600 C 160 520 360 630 560 550 C 760 470 960 590 1120 510'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 32px 32px, 32px 32px, 800px 800px;
+  background-position: 0 0, 16px 16px, 0 0;
+}
+
+/* Fire-Branded Leather Badge / Stamp */
+.leather-stamp {
+  background-color: #22382c;
+  color: #f5f0eb;
+  border: 1px dashed #b8860b;
+  border-radius: 2px;
+  transform: rotate(-1.5deg);
+  font-family: var(--font-courier), monospace;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  box-shadow: 2px 3px 0px rgba(45, 49, 48, 0.2);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+.leather-stamp-terracotta {
+  background-color: #9e472a;
+  color: #f5f0eb;
+  border: 1px dashed #b8860b;
+  border-radius: 2px;
+  transform: rotate(1.2deg);
+  font-family: var(--font-courier), monospace;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  box-shadow: 2px 3px 0px rgba(45, 49, 48, 0.25);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 700;
+}
+
+/* Brass Compass Rivet Pin */
+.brass-rivet {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #ffd700, #b8860b 60%, #5c4033 100%);
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.4), inset -1px -1px 2px rgba(0, 0, 0, 0.5);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* Pine Green & Gold Wax Seals */
+.pine-wax-seal {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #2e4d3c, #22382c 70%, #15241c 100%);
+  border: 2px solid #b8860b;
+  box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.35), inset 0 0 6px rgba(184, 134, 11, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #b8860b;
+  transform: rotate(-5deg);
+}
+
+/* Handcrafted Paperclip Anchor */
+.paperclip-anchor {
+  position: absolute;
+  top: -12px;
+  right: 24px;
+  width: 16px;
+  height: 42px;
+  border: 3px solid #94a3b8;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+  z-index: 20;
+}
+
+/* Skeuomorphic Field Notes Ledger Card */
+.field-ledger-card {
+  position: relative;
+  background-color: #f5f0eb;
+  border: 1px solid #b8860b;
+  box-shadow: 
+    3px 5px 12px rgba(45, 49, 48, 0.15),
+    inset 0 0 30px rgba(227, 222, 214, 0.6);
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.3s ease;
+}
+
+.field-ledger-card:hover {
+  transform: translateY(-4px) rotate(0.5deg);
+  box-shadow: 
+    6px 12px 24px rgba(45, 49, 48, 0.22),
+    inset 0 0 20px rgba(227, 222, 214, 0.4);
+}
+
+/* Annotation & Fountain Pen Margin Tips */
+.margin-note {
+  font-family: var(--font-handwriting), "Caveat", cursive;
+  font-size: 1.25rem;
+  color: #9e472a;
+  line-height: 1.2;
+  transform: rotate(-2deg);
+}
+
+/* Accordion Fold Canvas Map Transitions */
+.canvas-fold-pane {
+  background: #f5f0eb;
+  border-right: 1px dashed #b8860b;
+  box-shadow: inset -6px 0 12px rgba(45, 49, 48, 0.08);
+}
+
