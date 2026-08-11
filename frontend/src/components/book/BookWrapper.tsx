@@ -16,6 +16,7 @@ import {
   X,
   Share2,
   Check,
+  ExternalLink,
 } from "lucide-react"
 import { GuidebookOutput, ActivityStop, StampBadge } from "@/types/guidebook"
 import { GuidebookPage } from "./GuidebookPage"
@@ -97,7 +98,7 @@ export const BookWrapper: React.FC<BookWrapperProps> = ({
   // Prepare Page Objects for the Flipbook Spreads
   const pagesList = useMemo(() => {
     const list: Array<{
-      type: "cover" | "daily" | "hotels" | "stamps" | "backCover"
+      type: "cover" | "daily" | "hotels" | "costs" | "stamps" | "backCover"
       dailyPageData?: any
     }> = [
       { type: "cover" },
@@ -112,6 +113,9 @@ export const BookWrapper: React.FC<BookWrapperProps> = ({
     if (guidebook.hotels && guidebook.hotels.length > 0) {
       list.push({ type: "hotels" })
     }
+
+    // Financial Cost Breakup Page
+    list.push({ type: "costs" })
 
     // Stamps Vault Page
     const allStamps: StampBadge[] = [
@@ -333,6 +337,7 @@ export const BookWrapper: React.FC<BookWrapperProps> = ({
                   destination={guidebook.destination}
                   durationDays={guidebook.duration_days}
                   coverStamp={guidebook.cover_stamp}
+                  costBreakup={guidebook.cost_breakup}
                   onSwapStop={handleOpenSwapModal}
                   swappingStopId={swappingStopId}
                   onSelectStop={(stop) => setSelectedStop(stop)}
@@ -375,17 +380,63 @@ export const BookWrapper: React.FC<BookWrapperProps> = ({
               {selectedStop?.description}
             </div>
 
-            {selectedStop?.vintage_tip && (
-              <div className="p-3 bg-[#fbf8f1] rounded border border-[#e2d5c3]">
-                <p className="margin-note text-sm text-[#1e3a8a]">
-                  Insider Tip: {selectedStop.vintage_tip}
-                </p>
+            {/* Verified Traveler Reviews */}
+            {selectedStop?.reviews && selectedStop.reviews.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-[#d4c3ab]">
+                <span className="font-bold text-xs text-[#22382c] block uppercase tracking-wider font-mono">
+                  Verified Traveler Reviews
+                </span>
+                <div className="space-y-2">
+                  {selectedStop.reviews.map((rev, rIdx) => (
+                    <div key={rIdx} className="p-2.5 bg-[#fcfaf5] rounded border border-[#d4c3ab] text-xs space-y-1">
+                      <div className="flex items-center justify-between font-mono text-[10px] text-[#7c4a27] font-bold">
+                        <span>{rev.author} ({rev.source})</span>
+                        <span className="text-[#9e472a] font-bold">★ {rev.rating} / 5</span>
+                      </div>
+                      <p className="italic text-[#2d3130]">"{rev.text}"</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
             <div className="flex items-center justify-between pt-2 border-t border-[#d4c3ab] font-bold text-[#7c4a27]">
               <span>Estimated Cost:</span>
               <span className="text-sm">{selectedStop?.estimated_cost}</span>
+            </div>
+
+            {/* Deep Links Action Row */}
+            <div className="pt-3 border-t border-[#d4c3ab] flex flex-wrap gap-2 justify-end">
+              {selectedStop?.google_maps_url && (
+                <a
+                  href={selectedStop.google_maps_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded bg-[#9e472a] hover:bg-[#853a21] text-[#f5f0eb] text-xs font-semibold inline-flex items-center gap-1 font-mono"
+                >
+                  <ExternalLink className="w-3 h-3" /> Google Maps
+                </a>
+              )}
+              {selectedStop?.tripadvisor_url && (
+                <a
+                  href={selectedStop.tripadvisor_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded bg-[#00af87] hover:bg-[#008f6e] text-white text-xs font-semibold inline-flex items-center gap-1 font-mono"
+                >
+                  <ExternalLink className="w-3 h-3" /> TripAdvisor
+                </a>
+              )}
+              {selectedStop?.booking_url && (
+                <a
+                  href={selectedStop.booking_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded bg-[#1e3a5f] hover:bg-[#0f2942] text-[#f8fafc] text-xs font-semibold inline-flex items-center gap-1 font-mono border border-[#94a3b8]"
+                >
+                  <ExternalLink className="w-3 h-3" /> Booking.com
+                </a>
+              )}
             </div>
           </div>
         </DialogContent>

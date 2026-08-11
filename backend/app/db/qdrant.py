@@ -298,11 +298,12 @@ class QdrantService:
             )
             return False
         try:
+            point_id = self._to_valid_uuid(venue_id)
             await self.client.upsert(
                 collection_name=self.collection_name,
                 points=[
                     models.PointStruct(
-                        id=venue_id, vector=vector, payload=payload
+                        id=point_id, vector=vector, payload=payload
                     )
                 ],
             )
@@ -311,15 +312,23 @@ class QdrantService:
             logger.error(f"Failed to upsert venue {venue_id} to Qdrant: {e}")
             return False
 
+    def _to_valid_uuid(self, id_str: str) -> str:
+        import hashlib
+        import uuid
+        try:
+            return str(uuid.UUID(id_str))
+        except (ValueError, AttributeError):
+            return str(uuid.UUID(hex=hashlib.md5(str(id_str).encode("utf-8")).hexdigest()))
+
     async def upsert_venues_batch(
         self, points: list[tuple[str, list[float], dict[str, Any]]]
     ) -> int:
-        """Upsert a batch of (venue_id, vector, payload) points into Qdrant."""
+        """Upsert a batch of (venue_id, vector, payload) points into Qdrant after converting IDs to valid UUIDs."""
         if not self.is_connected or not self.client or not points:
             return 0
         try:
             point_structs = [
-                models.PointStruct(id=vid, vector=vec, payload=pld)
+                models.PointStruct(id=self._to_valid_uuid(vid), vector=vec, payload=pld)
                 for vid, vec, pld in points
             ]
             await self.client.upsert(

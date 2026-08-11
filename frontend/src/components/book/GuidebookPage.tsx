@@ -12,9 +12,12 @@ import {
   Info,
   Calendar,
   Building2,
-  Bookmark
+  Bookmark,
+  ExternalLink,
+  Receipt,
+  CreditCard,
 } from "lucide-react"
-import { DailyPage, HotelListing, StampBadge, ActivityStop } from "@/types/guidebook"
+import { DailyPage, HotelListing, StampBadge, ActivityStop, CostBreakup } from "@/types/guidebook"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -26,7 +29,7 @@ export interface GuidebookPageProps {
   pageNumber: number
   totalPages: number
   pageSide?: "left" | "right" | "single"
-  type: "cover" | "daily" | "hotels" | "stamps" | "backCover"
+  type: "cover" | "daily" | "hotels" | "costs" | "stamps" | "backCover"
   dailyPageData?: DailyPage
   hotelsData?: HotelListing[]
   stampsData?: StampBadge[]
@@ -35,6 +38,7 @@ export interface GuidebookPageProps {
   destination?: string
   durationDays?: number
   coverStamp?: StampBadge
+  costBreakup?: CostBreakup
   onSwapStop?: (dayNumber: number, stopId: string) => void
   swappingStopId?: string | null
   onSelectStop?: (stop: ActivityStop) => void
@@ -55,6 +59,7 @@ export const GuidebookPage = forwardRef<HTMLDivElement, GuidebookPageProps>(
       destination = "Destination",
       durationDays = 3,
       coverStamp,
+      costBreakup,
       onSwapStop,
       swappingStopId,
       onSelectStop,
@@ -293,6 +298,27 @@ export const GuidebookPage = forwardRef<HTMLDivElement, GuidebookPageProps>(
                         </span>
 
                         <div className="flex items-center gap-2">
+                          {stop.google_maps_url && (
+                            <a
+                              href={stop.google_maps_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="h-6 px-1.5 text-[10px] text-[#9e472a] hover:bg-[#9e472a]/10 rounded font-sans inline-flex items-center gap-1 border border-[#9e472a]/30 font-semibold"
+                            >
+                              <ExternalLink className="w-2.5 h-2.5 text-[#9e472a]" /> Maps
+                            </a>
+                          )}
+                          {stop.tripadvisor_url && (
+                            <a
+                              href={stop.tripadvisor_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="h-6 px-1.5 text-[10px] text-[#00af87] hover:bg-[#00af87]/10 rounded font-sans inline-flex items-center gap-1 border border-[#00af87]/30 font-semibold"
+                            >
+                              <ExternalLink className="w-2.5 h-2.5 text-[#00af87]" /> Reviews
+                            </a>
+                          )}
+
                           {onSelectStop && (
                             <TooltipProvider>
                               <Tooltip>
@@ -303,7 +329,7 @@ export const GuidebookPage = forwardRef<HTMLDivElement, GuidebookPageProps>(
                                     onClick={() => onSelectStop(stop)}
                                     className="h-6 px-2 text-[11px] text-[#3d2314] hover:bg-[#b8a387]/20"
                                   >
-                                    <Info className="w-3 h-3 mr-1" /> View Details
+                                    <Info className="w-3 h-3 mr-1" /> Details
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent className="font-sans text-xs bg-[#3d2314] text-[#f7f2e7]">
@@ -383,14 +409,42 @@ export const GuidebookPage = forwardRef<HTMLDivElement, GuidebookPageProps>(
                       <span className="font-mono font-bold text-sm text-[#0f172a]">{hotel.price_per_night}</span>
                     </div>
 
-                    {/* Ticket Stub Footer Button */}
-                    <div className="pt-2 flex justify-end">
-                      <Button
-                        size="sm"
-                        className="h-7 text-xs bg-[#1e3a5f] hover:bg-[#0f2942] text-[#f8fafc] border border-[#94a3b8] font-sans"
-                      >
-                        Reserve Hotel Voucher
-                      </Button>
+                    {/* Verified Traveler Review Snippet */}
+                    {hotel.reviews && hotel.reviews.length > 0 && (
+                      <div className="font-sans text-[11px] bg-[#fdfbf7] p-2.5 rounded border border-[#e2d5c3] space-y-1">
+                        <div className="flex items-center justify-between text-[10px] text-[#7c4a27] font-bold">
+                          <span>Verified Review ({hotel.reviews[0].source})</span>
+                          <span className="flex items-center gap-0.5 text-[#c2410c]">
+                            <Star className="w-2.5 h-2.5 fill-current" /> {hotel.reviews[0].rating}
+                          </span>
+                        </div>
+                        <p className="italic text-[#3d2314]">"{hotel.reviews[0].text}"</p>
+                        <p className="text-[10px] text-muted-foreground text-right">— {hotel.reviews[0].author}</p>
+                      </div>
+                    )}
+
+                    {/* Ticket Stub Deep Links */}
+                    <div className="pt-2 flex items-center justify-end gap-2 font-sans">
+                      {hotel.booking_url && (
+                        <a
+                          href={hotel.booking_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="h-7 px-2.5 rounded bg-[#1e3a5f] hover:bg-[#0f2942] text-[#f8fafc] text-[11px] font-semibold inline-flex items-center gap-1 border border-[#94a3b8]"
+                        >
+                          <ExternalLink className="w-3 h-3 text-[#b8860b]" /> Reserve on Booking.com
+                        </a>
+                      )}
+                      {hotel.tripadvisor_url && (
+                        <a
+                          href={hotel.tripadvisor_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="h-7 px-2.5 rounded bg-[#00af87] hover:bg-[#008f6e] text-white text-[11px] font-semibold inline-flex items-center gap-1"
+                        >
+                          <ExternalLink className="w-3 h-3 text-white" /> TripAdvisor
+                        </a>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -398,7 +452,75 @@ export const GuidebookPage = forwardRef<HTMLDivElement, GuidebookPageProps>(
             </div>
           )}
 
-          {/* TYPE 3: Passport Stamps Vault Page */}
+          {/* TYPE 3: Expedition Financial Ledger & Cost Breakup Page */}
+          {type === "costs" && (
+            <div className="space-y-5">
+              <div className="border-b-2 border-[#b8860b] pb-3">
+                <Badge variant="stamp" className="stamp-badge stamp-gold text-[10px] mb-1">
+                  Treasury Ledger
+                </Badge>
+                <h2 className="text-xl md:text-2xl font-bold font-serif text-[#2d3130]">
+                  Expedition Cost Breakup
+                </h2>
+                <p className="text-xs font-mono text-[#9e472a] mt-0.5">
+                  Itemized Financial Estimates for {destination} ({durationDays} Days)
+                </p>
+              </div>
+
+              {costBreakup ? (
+                <div className="field-ledger-card p-4 border-2 border-[#b8860b] bg-[#f5f0eb] space-y-4 rounded shadow-sm text-xs font-mono">
+                  <div className="border-b border-dashed border-[#b8860b] pb-2 flex justify-between font-bold text-[#22382c]">
+                    <span>EXPEDITION CATEGORY</span>
+                    <span>ESTIMATED RANGE</span>
+                  </div>
+
+                  <div className="space-y-2.5 text-[#2d3130]">
+                    <div className="flex justify-between items-center bg-[#e3ded6]/60 p-2 rounded border border-[#b8860b]/30">
+                      <span className="font-semibold">🏨 Accommodations (Hotels)</span>
+                      <span className="font-bold text-[#22382c]">{costBreakup.hotels_total}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center bg-[#e3ded6]/60 p-2 rounded border border-[#b8860b]/30">
+                      <span className="font-semibold">🍽️ Dining & Local Cafes</span>
+                      <span className="font-bold text-[#22382c]">{costBreakup.dining_total}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center bg-[#e3ded6]/60 p-2 rounded border border-[#b8860b]/30">
+                      <span className="font-semibold">🎟️ Activity Fees & Entry</span>
+                      <span className="font-bold text-[#22382c]">{costBreakup.activities_total}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center bg-[#e3ded6]/60 p-2 rounded border border-[#b8860b]/30">
+                      <span className="font-semibold">🚃 Local Transit & Metro</span>
+                      <span className="font-bold text-[#22382c]">{costBreakup.transport_total}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t-2 border-[#b8860b] flex justify-between items-center text-sm font-bold text-[#9e472a]">
+                    <span>ESTIMATED GRAND TOTAL</span>
+                    <span className="text-base font-serif bg-[#22382c] text-[#f5f0eb] px-3 py-1 border-2 border-[#b8860b] rounded">
+                      {costBreakup.grand_total}
+                    </span>
+                  </div>
+
+                  {costBreakup.savings_tip && (
+                    <div className="p-3 bg-[#fbf8f1] border border-dashed border-[#b8860b] rounded">
+                      <p className="margin-note text-xs text-[#1e3a8a]">
+                        <span className="font-sans font-bold text-[#9e472a] uppercase not-italic">Ledger Tip: </span>
+                        {costBreakup.savings_tip}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-4 bg-[#fbf8f1] border border-dashed border-[#b8860b] text-center font-mono text-xs text-[#5c6260]">
+                  Cost breakup details being computed for {destination}...
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TYPE 4: Passport Stamps Vault Page */}
           {type === "stamps" && (
             <div className="space-y-5">
               <div className="border-b-2 border-[#1e3a5f]/80 pb-3">

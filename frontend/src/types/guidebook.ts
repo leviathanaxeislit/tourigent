@@ -7,6 +7,13 @@ export interface StampBadge {
   earned_date?: string;
 }
 
+export interface VenueReview {
+  author: string;
+  rating: number;
+  source: string;
+  text: string;
+}
+
 export interface ActivityStop {
   id: string;
   time_slot: string;
@@ -18,6 +25,10 @@ export interface ActivityStop {
   lng?: number;
   estimated_cost: string;
   vintage_tip?: string;
+  booking_url?: string;
+  tripadvisor_url?: string;
+  google_maps_url?: string;
+  reviews?: VenueReview[];
   qdrant_vector_id?: string;
 }
 
@@ -38,6 +49,20 @@ export interface HotelListing {
   price_per_night: string;
   rating: number;
   perk: string;
+  booking_url?: string;
+  tripadvisor_url?: string;
+  reviews?: VenueReview[];
+}
+
+export interface CostBreakup {
+  currency_symbol: string;
+  hotels_total: string;
+  dining_total: string;
+  activities_total: string;
+  transport_total: string;
+  grand_total: string;
+  budget_tier: string;
+  savings_tip?: string;
 }
 
 export interface GuidebookRequest {
@@ -57,6 +82,7 @@ export interface GuidebookOutput {
   cover_stamp: StampBadge;
   hotels: HotelListing[];
   pages: DailyPage[];
+  cost_breakup?: CostBreakup;
   created_at: string;
 }
 

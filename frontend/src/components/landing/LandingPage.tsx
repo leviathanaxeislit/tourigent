@@ -13,6 +13,8 @@ import { UnfoldingTrailMapModal } from "@/components/book/UnfoldingTrailMapModal
 
 import { GuidebookOutput, GuidebookRequest } from "@/types/guidebook"
 
+import { Logo } from "@/components/brand/Logo"
+
 interface LandingPageProps {
   onGenerateClick?: (request: GuidebookRequest) => void
 }
@@ -85,19 +87,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGenerateClick }) => 
       {/* Tourigent Header */}
       <header className="sticky top-0 z-50 backdrop-blur-md bg-[#f5f0eb]/90 border-b-2 border-[#b8860b]">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="pine-wax-seal text-sm">
-              <span>✈</span>
-            </div>
-            <div>
-              <span className="text-xl font-serif font-bold tracking-widest text-[#2d3130] block leading-none">
-                TOURIGENT
-              </span>
-              <span className="text-[11px] text-[#9e472a] font-mono tracking-wider uppercase font-semibold">
-                AI Tourist Agent & Vintage Travel Ledger
-              </span>
-            </div>
-          </div>
+          <Logo size={42} />
 
           <nav className="hidden md:flex items-center gap-8 font-mono text-xs font-bold uppercase tracking-wider text-[#5c6260]">
             <a href="#hero" className="hover:text-[#22382c] transition-colors">Trip Brief</a>

@@ -18,6 +18,13 @@ class StampBadge(BaseModel):
     )
 
 
+class VenueReview(BaseModel):
+    author: str = Field(default="Verified Traveler", description="Reviewer name")
+    rating: float = Field(default=4.8, description="Rating out of 5")
+    source: str = Field(default="TripAdvisor", description="TripAdvisor | Google Reviews | Booking.com")
+    text: str = Field(..., description="Authentic review quote or snippet")
+
+
 class ActivityStop(BaseModel):
     id: str = Field(..., description="Unique activity ID")
     time_slot: str = Field(..., description="Time slot, e.g. 09:00 AM - Morning Coffee")
@@ -33,6 +40,10 @@ class ActivityStop(BaseModel):
     vintage_tip: Optional[str] = Field(
         None, description="Handwritten margin note tip"
     )
+    booking_url: Optional[str] = Field(None, description="Deep link for booking or reservation")
+    tripadvisor_url: Optional[str] = Field(None, description="Deep link for TripAdvisor reviews")
+    google_maps_url: Optional[str] = Field(None, description="Google Maps navigation link")
+    reviews: list[VenueReview] = Field(default_factory=list, description="Authentic traveler reviews")
     qdrant_vector_id: Optional[str] = Field(
         None, description="Qdrant vector ID if stored"
     )
@@ -63,6 +74,20 @@ class HotelListing(BaseModel):
     price_per_night: str = Field(..., description="Price per night formatted")
     rating: float = Field(..., description="Rating out of 5")
     perk: str = Field(..., description="Special vintage perk or secret feature")
+    booking_url: Optional[str] = Field(None, description="Booking.com or hotel reservation link")
+    tripadvisor_url: Optional[str] = Field(None, description="TripAdvisor hotel review link")
+    reviews: list[VenueReview] = Field(default_factory=list, description="Authentic traveler reviews")
+
+
+class CostBreakup(BaseModel):
+    currency_symbol: str = Field(default="€", description="Currency symbol (e.g. €, $, ¥, £)")
+    hotels_total: str = Field(..., description="Total estimated accommodation cost")
+    dining_total: str = Field(..., description="Total estimated dining cost")
+    activities_total: str = Field(..., description="Total estimated activities & entry fees")
+    transport_total: str = Field(..., description="Total estimated local transit cost")
+    grand_total: str = Field(..., description="Overall trip cost range e.g. €650 - €950")
+    budget_tier: str = Field(default="Moderate", description="Budget, Moderate, Luxury")
+    savings_tip: Optional[str] = Field(None, description="Vintage traveler money saving tip")
 
 
 class GuidebookRequest(BaseModel):
@@ -94,6 +119,9 @@ class GuidebookOutput(BaseModel):
     )
     pages: list[DailyPage] = Field(
         default_factory=list, description="Day-by-day travel pages"
+    )
+    cost_breakup: Optional[CostBreakup] = Field(
+        None, description="Itemized cost breakup and financial summary"
     )
     created_at: str = Field(..., description="Creation ISO timestamp")
 

@@ -1,12 +1,14 @@
 "use client"
 
 import React, { useState } from "react"
+import { useRouter } from "next/navigation"
 import { LandingPage } from "@/components/landing/LandingPage"
 import { BookContainer } from "@/components/book/BookContainer"
 import { GuidebookOutput, GuidebookRequest } from "@/types/guidebook"
 import { generateGuidebook, swapActivityStop, StatusUpdate } from "@/lib/api"
 
 export default function Home() {
+  const router = useRouter()
   const [guidebook, setGuidebook] = useState<GuidebookOutput | null>(null)
   const [loading, setLoading] = useState(false)
   const [statusMessage, setStatusMessage] = useState("Initializing LangGraph Tourist Agent Pipeline...")
@@ -20,16 +22,18 @@ export default function Home() {
           setStatusMessage(update.message)
         }
       })
-      setGuidebook(data)
-      if (typeof window !== "undefined" && data?.id) {
-        window.history.pushState({}, "", `/guidebook/${data.id}`)
+      if (data?.id) {
+        router.push(`/guidebook/${data.id}`)
+      } else {
+        setGuidebook(data)
       }
     } catch (e: any) {
       console.warn("Backend API error or stream issue, using fallback mock:", e)
       const mockGb = createMockGuidebook(request.destination)
-      setGuidebook(mockGb)
-      if (typeof window !== "undefined" && mockGb?.id) {
-        window.history.pushState({}, "", `/guidebook/${mockGb.id}`)
+      if (mockGb?.id) {
+        router.push(`/guidebook/${mockGb.id}`)
+      } else {
+        setGuidebook(mockGb)
       }
     } finally {
       setLoading(false)
@@ -96,7 +100,10 @@ export default function Home() {
       <BookContainer
         guidebook={guidebook}
         onSwapStop={handleSwapStop}
-        onCloseBook={() => setGuidebook(null)}
+        onCloseBook={() => {
+          setGuidebook(null)
+          router.push("/")
+        }}
       />
     )
   }
