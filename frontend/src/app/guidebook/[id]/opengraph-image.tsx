@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og"
 
-export const runtime = "edge"
+
 export const alt = "Shared Tourigent Travel Guidebook"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
@@ -70,7 +70,7 @@ export default async function GuidebookOGImage({
               position: "absolute",
               top: "28px",
               right: "32px",
-              border: "3px stroke #9e472a",
+              border: "3px solid #9e472a",
               color: "#9e472a",
               padding: "8px 20px",
               borderRadius: "2px",

@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og"
 
-export const runtime = "edge"
+
 export const alt = "Tourigent — Vintage Paper Travel Guidebook"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
@@ -47,7 +47,7 @@ export default async function OpenGraphImage() {
               position: "absolute",
               top: "24px",
               right: "28px",
-              border: "2px stroke #9e472a",
+              border: "2px solid #9e472a",
               color: "#9e472a",
               padding: "6px 16px",
               borderRadius: "2px",

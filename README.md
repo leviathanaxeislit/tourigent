@@ -8,12 +8,13 @@
 
 - 📜 **Skeuomorphic Ledger & Paper Aesthetic**: Parchment textures, wax seals, rubber stamps, brass rivets, turn-of-the-century typography, and physical page-turning (`react-pageflip`).
 - 🤖 **LangGraph Multi-Node AI Pipeline**:
-  1. **Planner**: Deconstructs user travel preferences into search intents.
+  1. **Planner**: Deconstructs user travel preferences into search intents and checks Qdrant vector memory cache.
   2. **Grounding Search**: Fetches real-time venue info, geo-coordinates, operating hours, and live prices via Gemini Search Grounding.
   3. **Guidebook Synthesis**: Formats structured vintage itineraries with marginalia, historical context, and packing lists.
 - ⚡ **Real-Time Progress (SSE)**: Streams step-by-step pipeline execution updates over Server-Sent Events.
 - 🗺️ **Interactive Maps & Elevation Ascent**: Visual trail maps, location markers, and alpine elevation ascent profiles for itineraries.
 - 🔄 **Interactive Venue Swapper**: Swap any activity stop in real-time using vector similarity search & Gemini grounding.
+- 🔗 **Shareable Itineraries & OG Cards**: Unique permalinks (`/guidebook/[id]`) with dynamic OpenGraph meta image previews generated at runtime.
 - ♿ **Shadcn UI & Accessibility**: Accessible primitives styled with high-end skeuomorphic design rules.
 
 ---
@@ -22,7 +23,7 @@
 
 ### Backend
 - **Framework**: Python 3.11+ / FastAPI (Async)
-- **AI Orchestration**: LangGraph
+- **AI Orchestration**: LangGraph (`StateGraph`)
 - **LLM Engine**: Google Gemini API (`google-genai` SDK with Search Grounding)
 - **Vector Database**: Qdrant (`qdrant-client` async)
 - **Server**: Uvicorn
@@ -42,12 +43,12 @@
 tourigent/
 ├── backend/
 │   ├── app/
-│   │   ├── api/v1/endpoints/  # FastAPI API router endpoints (generate, swap-stop)
+│   │   ├── api/v1/endpoints/  # FastAPI API endpoints (generate, swap-stop, get by ID)
 │   │   ├── core/              # App configuration & settings
 │   │   ├── db/                # Qdrant vector client & collection management
 │   │   ├── graph/             # LangGraph state graph pipeline & nodes
 │   │   ├── schemas/           # Pydantic v2 validation models
-│   │   ├── services/          # Venue swapper & helper services
+│   │   ├── services/          # Venue swapper & web fetcher services
 │   │   └── main.py            # FastAPI entrypoint & middleware
 │   ├── .env.example           # Backend environment variable template
 │   ├── requirements.txt       # Python dependencies
@@ -55,7 +56,7 @@ tourigent/
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── app/               # Next.js App Router pages & layouts
+│   │   ├── app/               # Next.js App Router (home, /guidebook/[id], OG cards)
 │   │   ├── components/        # Shadcn primitives & custom vintage UI components
 │   │   └── lib/               # API clients, hooks, & helpers
 │   ├── .env.example           # Frontend environment variable template
@@ -156,7 +157,7 @@ tourigent/
 
 ### Health Check
 - `GET /health`
-  Returns server health status and Qdrant connection state.
+  Returns server health status and Qdrant vector database state.
 
 ### Generate Guidebook
 - `POST /api/v1/guidebook/generate`
@@ -171,6 +172,10 @@ tourigent/
       "budget": "Moderate"
     }
     ```
+
+### Retrieve Guidebook by ID
+- `GET /api/v1/guidebook/{guidebook_id}`
+  - Returns stored guidebook JSON by its unique identifier for permalinks & shareable cards.
 
 ### Swap Activity Stop
 - `POST /api/v1/guidebook/swap-stop`
@@ -188,11 +193,11 @@ npx vercel
 ```
 
 Vercel route configuration handles API rewrites automatically:
-- `/api/v1/*` ➡️ FastAPI Backend (`backend/app/main.py`)
-- `/*` ➡️ Next.js Frontend (`frontend/`)
+- `/api/v1/*` -> FastAPI Backend (`backend/app/main.py`)
+- `/*` -> Next.js Frontend (`frontend/`)
 
 ---
 
 ## 📄 License
 
-MIT License. Designed with 📜 for modern travelers.
+MIT License. Designed for modern travelers.
